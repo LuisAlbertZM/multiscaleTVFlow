@@ -1,7 +1,7 @@
 {
     "spiral": {
-        "ground_truth": "spiral.tif",
-        "noisy": "noisyspiral.tif",
+        "ground_truth": "spiral.png",
+        "noisy": "noisyspiral.png",
         "lambda": 50.0,
         "SE2": {
             "xi": 0.51,
@@ -22,10 +22,9 @@
         "bm3d_max_scale": 50.0,
         "bm3d_step_scale": 5.0
     },
-
     "monalisa": {
-        "ground_truth": "monalisa.tif",
-        "noisy": "noisymonalisa.tif",
+        "ground_truth": "monalisa.png",
+        "noisy": "noisymonalisa.png",
         "lambda": 50.0,
         "SE2": {
             "xi": 0.51,
@@ -46,10 +45,9 @@
         "bm3d_max_scale": 50.0,
         "bm3d_step_scale": 5.0
     },
-
     "collagen": {
-        "ground_truth": "colfib.png",
-        "noisy": "verynoisycolfib.png",
+        "ground_truth": "collagen.png",
+        "noisy": "noisycollagen.png",
         "lambda": 50.0,
         "SE2": {
             "xi": 0.51,
