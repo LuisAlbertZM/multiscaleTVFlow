@@ -1,0 +1,33 @@
+{
+    "spiral": {
+        "ground_truth": "spiral.tif",
+        "noisy": "noisyspiral.tif",
+        "ξ": 0.51,
+        "φ": null,
+        "a": 2.0,
+        "σ_s": 1.0,
+        "σ_o": 0.5,
+        "σ_a": 0.5,
+        "λ": 50.0,
+        "cut_freq": 0.5,
+        "T": 1.0,
+        "bm3d_max_scale": 50.0,
+        "bm3d_step_scale": 5.0
+    },
+    
+    "monalisa": {
+        "ground_truth": "monalisa.tif",
+        "noisy": "noisymonalisa.tif",
+        "ξ": 0.51,
+        "φ": null,
+        "a": 2.0,
+        "σ_s": 1.0,
+        "σ_o": 0.5,
+        "σ_a": 0.5,
+        "λ": 50.0,
+        "cut_freq": 0.5,
+        "T": 1.0,
+        "bm3d_max_scale": 50.0,
+        "bm3d_step_scale": 5.0
+    }
+}
