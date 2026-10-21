@@ -9,10 +9,11 @@ import torch
 import torch.nn.functional as F
 from math import ceil, pi
 from tqdm.auto import tqdm
-from msrtv.utils import gaussian_blur_4d_separable, get_A_kernels
+from msrtv.utils import gaussian_blur_4d_separable, get_A_kernels, PSNR
+from msrtv.SIM2 import inverse_wavelet_transform
 
 
-def TV_enhancing(
+def denoise(
     u: torch.Tensor,
     T: float,
     G_inv: tuple[float, float, float, float],
@@ -20,6 +21,8 @@ def TV_enhancing(
     σ_s: float,
     σ_o: float,
     σ_a: float,
+    ground_truth: torch.Tensor | None = None,
+    max_val: float = 255.
 ) -> torch.Tensor:
     """
     Perform TV flow enhancing in SIM(2), using an adaptation of the algorithm
@@ -38,6 +41,12 @@ def TV_enhancing(
           values greater than 0.
         `σ_a`: standard deviation of the scale regularisation, taking
           values greater than 0.
+        `ground_truth`: dictionary for computing PSNR.
+          "groundtruth": torch.Tensor ground truth, with shape [H, W].
+          "u_low": torch.Tensor low passed noisy image, with shape [H, W].
+          "filters": torch.Tensor filters used for lifting.
+          "lowpass": torch.Tensor lowpass filter used for lifting.
+        `max_val`: maximum value images take, for computing PSNR.
 
     Returns:
         torch.Tensor solution to the TV PDE with initial condition `u` at time
@@ -59,9 +68,17 @@ def TV_enhancing(
     n = ceil(T / dt_opt)
     dt = T / n
 
+    PSNRs = []
     for _ in tqdm(range(n)):
         u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a)
-    return u
+        if ground_truth is not None:
+            PSNRs.append(PSNR(
+                inverse_wavelet_transform(u, ground_truth["u_low"], ground_truth["filters"], ground_truth["lowpass"]),
+                ground_truth["ground_truth"],
+                max_val=max_val
+            ))
+
+    return u, PSNRs
 
 
 def step_TV(

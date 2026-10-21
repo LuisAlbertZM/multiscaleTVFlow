@@ -9,15 +9,17 @@ import torch
 import torch.nn.functional as F
 from math import ceil, pi
 from tqdm.auto import tqdm
-from msrtv.utils import gaussian_blur_3d_separable, get_A_kernels
+from msrtv.utils import gaussian_blur_3d_separable, get_A_kernels, PSNR
 
 
-def TV_enhancing(
+def denoise(
     u: torch.Tensor,
     T: float,
     G_inv: tuple[float, float, float],
     σ_s: float,
     σ_o: float,
+    ground_truth: torch.Tensor | None = None,
+    max_val: float = 255.
 ) -> torch.Tensor:
     """
     Perform TV flow enhancing in SE(2), using an adaptation of the algorithm
@@ -33,6 +35,8 @@ def TV_enhancing(
           greater than 0.
         `σ_o`: standard deviation of the orientational regularisation, taking
           values greater than 0.
+        `ground_truth`: torch.Tensor ground truth, with shape [H, W].
+        `max_val`: maximum value images take, for computing PSNR.
 
     Returns:
         torch.Tensor solution to the TV PDE with initial condition `u` at time
@@ -51,9 +55,13 @@ def TV_enhancing(
     n = ceil(T / dt_opt)
     dt = T / n
 
+    PSNRs = []
     for _ in tqdm(range(n)):
         u = step_TV(u, dt, G_inv, σ_s, σ_o)
-    return u
+        if ground_truth is not None:
+            PSNRs.append(PSNR(u.sum(-2), ground_truth, max_val=max_val))
+
+    return u, PSNRs
 
 
 def step_TV(

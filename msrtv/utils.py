@@ -1,7 +1,7 @@
 
 import torch
 import torch.nn.functional as F
-from math import ceil
+from math import ceil, log10
 from functools import lru_cache
 
 def gaussian_blur_4d_separable(x, sigmas, truncate=4.0):
@@ -118,3 +118,17 @@ def get_A_kernels(Or: int, device: str | torch.DeviceObjType):
     k_A2 = (A2_forward - A2_backward) / 2.0
 
     return k_A1, k_A2
+
+
+def PSNR(
+    denoised: torch.Tensor,
+    ground_truth: torch.Tensor,
+    max_val: float = 255.,
+) -> float:
+    """
+    Compute the Peak Signal-to-Noise Ratio (PSNR) of `denoised` with respect to
+    `ground_truth`.
+    """
+    mean_squared_difference = ((denoised - ground_truth)**2).mean()
+    
+    return 10 * log10(max_val**2 / mean_squared_difference)
