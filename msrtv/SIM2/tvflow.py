@@ -10,7 +10,16 @@ import torch.nn.functional as F
 from math import ceil, pi
 from tqdm.auto import tqdm
 from msrtv.utils import gaussian_blur_4d_separable, get_A_kernels, PSNR
-from msrtv.SIM2 import inverse_wavelet_transform
+from msrtv.SIM2.simoncellitransform import inverse_wavelet_transform
+from dataclasses import dataclass
+
+
+@dataclass
+class GroundTruth:
+    ground_truth: torch.Tensor
+    u_low: torch.Tensor
+    filters: torch.Tensor
+    lowpass: torch.Tensor
 
 
 def denoise(
@@ -21,7 +30,7 @@ def denoise(
     σ_s: float,
     σ_o: float,
     σ_a: float,
-    ground_truth: torch.Tensor | None = None,
+    ground_truth: GroundTruth | None = None,
     max_val: float = 255.
 ) -> torch.Tensor:
     """
@@ -41,11 +50,11 @@ def denoise(
           values greater than 0.
         `σ_a`: standard deviation of the scale regularisation, taking
           values greater than 0.
-        `ground_truth`: dictionary for computing PSNR.
-          "groundtruth": torch.Tensor ground truth, with shape [H, W].
-          "u_low": torch.Tensor low passed noisy image, with shape [H, W].
-          "filters": torch.Tensor filters used for lifting.
-          "lowpass": torch.Tensor lowpass filter used for lifting.
+        `ground_truth`: GroundTruth instance for computing PSNR.
+          groundtruth: torch.Tensor ground truth, with shape [H, W].
+          u_low: torch.Tensor low passed noisy image, with shape [H, W].
+          filters: torch.Tensor filters used for lifting.
+          lowpass: torch.Tensor lowpass filter used for lifting.
         `max_val`: maximum value images take, for computing PSNR.
 
     Returns:
@@ -62,7 +71,7 @@ def denoise(
     S = u.shape[-4]
     Or = u.shape[-3]
     dθ = 2 * pi / (Or - 1)
-    da = torch.log(torch.tensor(a, device=u.device, dtype=u.dtype))
+    da = min(a - 1., 1. - 1./a)
     max_a = a**(S-1)
     dt_opt = compute_timestep(1.0, dθ, da, G_inv, max_a)
     n = ceil(T / dt_opt)
@@ -73,8 +82,8 @@ def denoise(
         u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a)
         if ground_truth is not None:
             PSNRs.append(PSNR(
-                inverse_wavelet_transform(u, ground_truth["u_low"], ground_truth["filters"], ground_truth["lowpass"]),
-                ground_truth["ground_truth"],
+                inverse_wavelet_transform(u, ground_truth.u_low, ground_truth.filters, ground_truth.lowpass),
+                ground_truth.ground_truth,
                 max_val=max_val
             ))
 
@@ -94,7 +103,6 @@ def step_TV(
     k_A1, k_A2 = get_A_kernels(Or, u.device)
     dθ = 2 * torch.pi / (Or - 1)
     scales = (a ** torch.arange(S, device=u.device))
-    da = torch.log(torch.tensor(a, device=u.device))
 
     u_reshaped = u.reshape(1, S * Or, H, W)
     u_pad = F.pad(u_reshaped, (1, 1, 1, 1), mode="replicate")

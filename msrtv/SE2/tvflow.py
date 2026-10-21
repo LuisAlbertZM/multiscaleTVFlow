@@ -59,7 +59,7 @@ def denoise(
     for _ in tqdm(range(n)):
         u = step_TV(u, dt, G_inv, σ_s, σ_o)
         if ground_truth is not None:
-            PSNRs.append(PSNR(u.sum(-2), ground_truth, max_val=max_val))
+            PSNRs.append(PSNR(u.sum(-3), ground_truth, max_val=max_val))
 
     return u, PSNRs
 

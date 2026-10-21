@@ -172,7 +172,7 @@ def cakewavelet_stack_fourier(
 
     Returns
     -------
-    A tensor of shape `[B, Cin, Or, N_spatial, N_spatial]`
+    A tensor of shape `[Or, N_spatial, N_spatial]`
     """
     dtheta = 2 * pi / orientations
     rs_grid, thetas_grid = _polar_grids(N_spatial)
@@ -185,7 +185,7 @@ def cakewavelet_stack_fourier(
     if inflection_point is not None:
         cws_F *= _radial_window(rs_grid, mn_order, inflection_point)[None, ...]
 
-    return cws_F[None, None, ...]
+    return cws_F
 
 
 def wavelet_transform(f: torch.Tensor, cws_F: torch.Tensor) -> torch.Tensor:
@@ -195,21 +195,21 @@ def wavelet_transform(f: torch.Tensor, cws_F: torch.Tensor) -> torch.Tensor:
     Parameters
     ----------
     f : torch.Tensor
-        Input tensor of shape `[B, C, H, W]`.
+        Input tensor of shape `[..., H, W]`.
 
     cws_F : torch.Tensor
-        Tensor of cakewavelets of shape `[B, C, Or, H, W]`.
+        Tensor of cakewavelets of shape `[Or, H_cws, W_cws]`, with
+        `H_cws <= H` and `W_cws <= W`.
 
     Returns
     -------
-    Tensor of shape `[B, C, Or, H, W]`.
+    Tensor of shape `[..., Or, H, W]`.
     """
-    B, Cin, H, W = f.shape
-    Cout = Cin
-    Or, H_cws, W_cws = cws_F.shape[2:]
+    H, W = f.shape[-2:]
+    H_cws, W_cws = cws_F.shape[-2:]
 
     if (
-        cws_F.shape[-2:] != f.shape[-2:]
+        (H_cws, W_cws) != (H, W)
     ):  # Pad kernels so we can convolve by multiplication in Fourier domain.
         pad_1_l = floor((H - H_cws) / 2)
         pad_1_r = ceil((H - H_cws) / 2)
@@ -217,17 +217,12 @@ def wavelet_transform(f: torch.Tensor, cws_F: torch.Tensor) -> torch.Tensor:
         pad_2_r = ceil((W - W_cws) / 2)
         cws_F = F.pad(
             cws_F,
-            (pad_2_r, pad_2_l, pad_1_r, pad_1_l, 0, 0),
+            (pad_2_r, pad_2_l, pad_1_r, pad_1_l),
             mode="constant",
             value=0.0,
         )
 
-    cws_F = torch.fft.fftshift(cws_F, dim=(-2, -1))
+    cws_F = torch.fft.fftshift(cws_F, dim=(-2, -1)).to(f.device)
 
-    ost = torch.zeros((B, Cout, Or, H, W), device=f.device)
     f_hat = torch.fft.fft2(f)
-    for i in range(Or):
-        ψ_theta_hat = cws_F[..., i, :, :]
-        U_theta = torch.fft.ifft2(ψ_theta_hat * f_hat).real[None, ...]
-        ost[..., i, :, :] = U_theta
-    return ost
+    return torch.fft.ifft2(cws_F * f_hat[..., None, :, :]).real

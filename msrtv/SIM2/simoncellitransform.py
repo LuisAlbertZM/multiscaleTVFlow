@@ -8,11 +8,11 @@
     for Multi-Scale Derivative Computation" (1995). The primary methods are:
       1. `steerable_wavelet_stack`: compute the stack of steerable wavelets in
       the Fourier domain.
-      2. `wavelet_transform`: compute the wavelet transform of a 2D image with
-      respect to the steerable wavelets.
+      2. `wavelet_transform`: compute the (real) wavelet transform of a 2D
+      image with respect to the steerable wavelets.
       3. `inverse_wavelet_transform`: reconstruct a 2D image from its wavelet
-      transform. Since the wavelets form a tight frame, this is simply the
-      adjoint of `wavelet_transform`.
+      transform. Since the real parts of the wavelets form a tight frame, this
+      is simply the adjoint of `wavelet_transform`.
 """
 
 import torch
@@ -74,7 +74,12 @@ def angular_windows(θs, Nθ, nyquist):
     θs_k = 2 * torch.pi * torch.arange(Nθ, dtype=θs.dtype, device=θs.device) / Nθ + torch.pi / 2
     dθs = torch.remainder(θs[None, ...] - θs_k[:, None, None] + torch.pi,
                           2 * torch.pi) - torch.pi
-    windows = torch.cos(dθs).clamp(min=0.)**order * (dθs.abs() < torch.pi / 2)
+    # The lobes are half-open, i.e. dθ ∈ [-π/2, π/2), such that frequencies on
+    # their boundary belong to exactly one of the windows at θ_k and θ_k + π.
+    # This only matters for order 0, i.e. Nθ < 4.
+    tol = 1e-6
+    support = (dθs >= -torch.pi / 2 - tol) & (dθs < torch.pi / 2 - tol)
+    windows = torch.cos(dθs).clamp(min=0.)**order * support
     windows = windows / torch.sqrt((windows**2).sum(dim=0, keepdim=True) + 1e-12)
 
     windows_opposite = angular_windows(θs + torch.pi, Nθ, torch.zeros_like(nyquist)) if nyquist.any() else windows
@@ -110,7 +115,15 @@ def steerable_wavelet_stack(N_y, N_x, N_scales, Nθ, cut_freq=0.25, transition_w
     # At scale s, the band pass is the high pass window at scale s, applied
     # after the low pass windows at all coarser scales. Then
     #   Σ_s |filters_s|**2 + |lowpass|**2 = 1,
-    # i.e. the wavelets form a tight frame.
+    # i.e. the complex wavelets form a tight frame.
+    #
+    # Since we only keep the real part of the coefficients, which coincides at
+    # θ_k and θ_k + π for real images, half of the band pass energy is lost
+    # away from the Nyquist frequencies. Scaling the filters there by √2 makes
+    # the real parts of the wavelets a tight frame again. At the Nyquist
+    # frequencies, the symmetrised windows satisfy ψ(ω) = ψ(-ω), so that no
+    # energy is lost.
+    angular = angular * torch.where(nyquist, 1., 2**0.5)
     filters = torch.empty((N_scales, Nθ, N_y, N_x), device=device, dtype=dtype)
     lowpass = torch.ones_like(ρs)
     for s in range(N_scales):
@@ -121,22 +134,21 @@ def steerable_wavelet_stack(N_y, N_x, N_scales, Nθ, cut_freq=0.25, transition_w
 
 def wavelet_transform(f, filters, lowpass):
     """
-    Return the wavelet transform of image `f`, of shape [..., N_y, N_x], under
-    the Fourier domain `filters` and `lowpass`, as computed by
-    `steerable_wavelet_stack`. The band pass coefficients are complex, of shape
-    [..., N_scales, Nθ, N_y, N_x], and the low pass residual is real, of shape
+    Return the wavelet transform of real image `f`, of shape [..., N_y, N_x],
+    under the Fourier domain `filters` and `lowpass`, as computed by
+    `steerable_wavelet_stack`. The band pass coefficients are real, of shape
+    [..., N_scales, Nθ, N_y, N_x], and so is the low pass residual, of shape
     [..., N_y, N_x].
     """
     f_hat = torch.fft.fft2(f)
-    U = torch.fft.ifft2(filters * f_hat[..., None, None, :, :])
-    U_low = torch.fft.ifft2(lowpass * f_hat).real
+    U = torch.fft.ifft2(filters.to(f.device) * f_hat[..., None, None, :, :]).real
+    U_low = torch.fft.ifft2(lowpass.to(f.device) * f_hat).real
     return U, U_low
 
 def inverse_wavelet_transform(U, U_low, filters, lowpass):
     """
-    Reconstruct an image from its wavelet transform `U`, `U_low`, as computed
-    by `wavelet_transform`. The complex band pass coefficients `U` are needed;
-    using only their real part loses the odd (edge) components.
+    Reconstruct a real image from its wavelet transform `U`, `U_low`, as
+    computed by `wavelet_transform`.
     """
-    f_hat = (filters * torch.fft.fft2(U)).sum(dim=(-4, -3)) + lowpass * torch.fft.fft2(U_low)
+    f_hat = (filters.to(U.device) * torch.fft.fft2(U)).sum(dim=(-4, -3)) + lowpass.to(U.device) * torch.fft.fft2(U_low)
     return torch.fft.ifft2(f_hat).real
