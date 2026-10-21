@@ -91,8 +91,8 @@ def step_TV(
     grad_norm = gaussian_blur_3d_separable(grad_norm, (σ_s, σ_s, σ_o))  # + 1e-9
 
     normalised_A1_u = G_inv[0] * A1_u / grad_norm
-    normalised_A2_u = G_inv[0] * A2_u / grad_norm
-    normalised_A3_u = G_inv[0] * A3_u / grad_norm
+    normalised_A2_u = G_inv[1] * A2_u / grad_norm
+    normalised_A3_u = G_inv[2] * A3_u / grad_norm
 
     normalised_A1_u_pad = F.pad(normalised_A1_u, (1, 1, 1, 1), mode="replicate")
     divergence_normalised_grad_1 = F.conv2d(normalised_A1_u_pad, k_A1, groups=Or)
