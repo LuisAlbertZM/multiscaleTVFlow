@@ -1,6 +1,6 @@
 """
-    wavelettransform
-    ================
+    simoncellitransform
+    ===================
 
     Provides methods to compute the undecimated steerable wavelet transform of a
     2D image, using the filters of Simoncelli's steerable pyramid, as described
