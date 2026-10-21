@@ -117,7 +117,6 @@ def step_TV(
         dim=1,
     )
     A3_u = (u_padded[:, 2:] - u_padded[:, :-2]) / (2.0 * dθ)
-    #print(A1_u.max(), A2_u.max(), A3_u.max())
 
     dscale_forward = a - 1.
     dscale_backward = 1. - 1. / a
@@ -174,7 +173,13 @@ def step_TV(
         
     )
 
-def compute_timestep(dxy, dθ, da, G_inv, max_a):
+def compute_timestep(
+    dxy: float,
+    dθ: float,
+    da: float,
+    G_inv: tuple[float, float, float, float],
+    max_a: float,
+):
     """
     Compute timestep to solve TV flow.
 

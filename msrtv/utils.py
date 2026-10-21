@@ -4,7 +4,12 @@ import torch.nn.functional as F
 from math import ceil, log10
 from functools import lru_cache
 
-def gaussian_blur_4d_separable(x, sigmas, truncate=4.0):
+
+def gaussian_blur_4d_separable(
+    x: torch.Tensor,
+    sigmas: tuple[float, float, float, float],
+    truncate: float = 4.0
+) -> torch.Tensor:
     kernel_size = [1 + 2 * ceil(truncate * sigma) for sigma in sigmas]
 
     x = x[None]
@@ -48,7 +53,12 @@ def gaussian_blur_4d_separable(x, sigmas, truncate=4.0):
 
     return x
 
-def gaussian_blur_3d_separable(x, sigmas, truncate=4.0):
+
+def gaussian_blur_3d_separable(
+    x: torch.Tensor,
+    sigmas: tuple[float, float, float],
+    truncate: float = 4.0
+) -> torch.Tensor:
     kernel_size = [1 + 2 * ceil(truncate * sigma) for sigma in sigmas]
 
     x = x[None, None]
@@ -74,7 +84,12 @@ def gaussian_blur_3d_separable(x, sigmas, truncate=4.0):
 
 
 @lru_cache
-def gaussian_kernel_1d(kernel_size, sigma, device=None, dtype=torch.float32):
+def gaussian_kernel_1d(
+    kernel_size: int,
+    sigma: float,
+    device: torch.DeviceObjType | str | None = None,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
     coords = (
         torch.arange(kernel_size, device=device, dtype=dtype) - (kernel_size - 1) / 2
     )
@@ -82,8 +97,9 @@ def gaussian_kernel_1d(kernel_size, sigma, device=None, dtype=torch.float32):
     kernel /= kernel.sum()
     return kernel
 
+
 @lru_cache
-def get_A_kernels(Or: int, device: str | torch.DeviceObjType):
+def get_A_kernels(Or: int, device: str | torch.DeviceObjType) -> tuple[torch.Tensor, torch.Tensor]:
     θs = torch.arange(Or, device=device) * 2 * torch.pi / Or
 
     cos = torch.cos(θs)

@@ -19,8 +19,11 @@ import torch
 from math import log2
 from functools import lru_cache
 
+
 @lru_cache
-def polar_grids(N_y, N_x, device=None, dtype=torch.float32):
+def _polar_grids(
+    N_y: int, N_x: int, device=None, dtype=torch.float32
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute a grid of radial and angle coordinates in the Fourier domain, in
     cycles per pixel and in FFT ordering (i.e. the zero frequency is at index
@@ -40,7 +43,10 @@ def polar_grids(N_y, N_x, device=None, dtype=torch.float32):
     θs[nyquist] = 0.
     return ρs, θs, nyquist
 
-def radial_windows(ρs, scale, cut_freq, transition_width):
+
+def _radial_windows(
+    ρs: torch.Tensor, scale: float, cut_freq: float, transition_width: float
+) -> torch.Tensor:
     """
     Compute the high and low pass radial windows of Simoncelli's steerable
     pyramid, dilated by `scale`. The windows satisfy high**2 + low**2 = 1.
@@ -50,7 +56,8 @@ def radial_windows(ρs, scale, cut_freq, transition_width):
     low = torch.sqrt(1. - high**2)
     return high, low
 
-def angular_windows(θs, Nθ, nyquist):
+
+def _angular_windows(θs: torch.Tensor, Nθ: int, nyquist: torch.Tensor) -> torch.Tensor:
     """
     Compute the angular windows of the complex steerable pyramid, normalised
     such that the sum of their squares is 1. Each window is a single lobe
@@ -82,11 +89,21 @@ def angular_windows(θs, Nθ, nyquist):
     windows = torch.cos(dθs).clamp(min=0.)**order * support
     windows = windows / torch.sqrt((windows**2).sum(dim=0, keepdim=True) + 1e-12)
 
-    windows_opposite = angular_windows(θs + torch.pi, Nθ, torch.zeros_like(nyquist)) if nyquist.any() else windows
+    windows_opposite = _angular_windows(θs + torch.pi, Nθ, torch.zeros_like(nyquist)) if nyquist.any() else windows
     return torch.where(nyquist, torch.sqrt((windows**2 + windows_opposite**2) / 2), windows)
 
-def steerable_wavelet_stack(N_y, N_x, N_scales, Nθ, cut_freq=0.25, transition_width=1., dilation=2, device=None,
-                            dtype=torch.float32):
+
+def steerable_wavelet_stack(
+    N_y: int, 
+    N_x: int, 
+    N_scales: int, 
+    Nθ: int, 
+    cut_freq: float = 0.25, 
+    transition_width: float = 1., 
+    dilation: float = 2.,
+    device : torch.DeviceObjType | str | None = None,
+    dtype: torch.dtype = torch.float32
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute the steerable wavelets in the Fourier domain, in FFT ordering.
 
@@ -109,30 +126,22 @@ def steerable_wavelet_stack(N_y, N_x, N_scales, Nθ, cut_freq=0.25, transition_w
         `filters`: band pass filters, of shape [N_scales, Nθ, N_y, N_x].
         `lowpass`: low pass residual filter, of shape [N_y, N_x].
     """
-    ρs, θs, nyquist = polar_grids(N_y, N_x, device=device, dtype=dtype)
-    angular = angular_windows(θs, Nθ, nyquist)
-
-    # At scale s, the band pass is the high pass window at scale s, applied
-    # after the low pass windows at all coarser scales. Then
-    #   Σ_s |filters_s|**2 + |lowpass|**2 = 1,
-    # i.e. the complex wavelets form a tight frame.
-    #
-    # Since we only keep the real part of the coefficients, which coincides at
-    # θ_k and θ_k + π for real images, half of the band pass energy is lost
-    # away from the Nyquist frequencies. Scaling the filters there by √2 makes
-    # the real parts of the wavelets a tight frame again. At the Nyquist
-    # frequencies, the symmetrised windows satisfy ψ(ω) = ψ(-ω), so that no
-    # energy is lost.
-    angular = angular * torch.where(nyquist, 1., 2**0.5)
+    ρs, θs, nyquist = _polar_grids(N_y, N_x, device=device, dtype=dtype)
+    angular = _angular_windows(θs, Nθ, nyquist) * torch.where(nyquist, 1., 2**0.5)
     filters = torch.empty((N_scales, Nθ, N_y, N_x), device=device, dtype=dtype)
     lowpass = torch.ones_like(ρs)
     for s in range(N_scales):
-        high, low = radial_windows(ρs, dilation**s, cut_freq, transition_width)
+        high, low = _radial_windows(ρs, dilation**s, cut_freq, transition_width)
         filters[s] = (lowpass * high)[None, ...] * angular
         lowpass = lowpass * low
     return filters, lowpass
 
-def wavelet_transform(f, filters, lowpass):
+
+def wavelet_transform(
+    f: torch.Tensor, 
+    filters: torch.Tensor, 
+    lowpass: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Return the wavelet transform of real image `f`, of shape [..., N_y, N_x],
     under the Fourier domain `filters` and `lowpass`, as computed by
@@ -145,7 +154,13 @@ def wavelet_transform(f, filters, lowpass):
     U_low = torch.fft.ifft2(lowpass.to(f.device) * f_hat).real
     return U, U_low
 
-def inverse_wavelet_transform(U, U_low, filters, lowpass):
+
+def inverse_wavelet_transform(
+    U: torch.Tensor, 
+    U_low: torch.Tensor, 
+    filters: torch.Tensor, 
+    lowpass: torch.Tensor,
+) -> torch.Tensor:
     """
     Reconstruct a real image from its wavelet transform `U`, `U_low`, as
     computed by `wavelet_transform`.

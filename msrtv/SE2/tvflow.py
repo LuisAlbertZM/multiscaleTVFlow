@@ -115,7 +115,11 @@ def step_TV(
     )
 
 
-def compute_timestep(dxy, dθ, G_inv):
+def compute_timestep(
+    dxy: float,
+    dθ: float,
+    G_inv: tuple[float, float, float],
+):
     """
     Compute timestep to solve TV flow.
 
