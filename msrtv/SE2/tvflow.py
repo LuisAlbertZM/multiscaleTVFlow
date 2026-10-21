@@ -20,7 +20,7 @@ def denoise(
     σ_o: float,
     ground_truth: torch.Tensor | None = None,
     max_val: float = 255.
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, list[float]]:
     """
     Perform TV flow enhancing in SE(2), using an adaptation of the algorithm
     described by Smets et al.[1]
@@ -50,7 +50,7 @@ def denoise(
           DOI:10.1007/s10851-020-00991-4.
     """
     Or = u.shape[-3]
-    dθ = 2 * pi / (Or - 1)
+    dθ = 2 * pi / Or
     dt_opt = compute_timestep(1.0, dθ, G_inv)
     n = ceil(T / dt_opt)
     dt = T / n
@@ -73,7 +73,7 @@ def step_TV(
 ) -> torch.Tensor:
     Or = u.shape[0]
     k_A1, k_A2 = get_A_kernels(Or, u.device)
-    dθ = 2 * torch.pi / (Or - 1)
+    dθ = 2 * torch.pi / Or
 
     u_pad = F.pad(u, (1, 1, 1, 1), mode="replicate")
     A1_u = F.conv2d(u_pad, k_A1, groups=Or)
@@ -119,17 +119,37 @@ def compute_timestep(
     dxy: float,
     dθ: float,
     G_inv: tuple[float, float, float],
+    g_min: float = 0.25,
 ):
     """
     Compute timestep to solve TV flow.
+
+    `step_TV` is a forward Euler step of
+        ∂u/∂t = Σ_i A_i (G_inv[i] A_i u / g),
+    where the A_i are central differences and g is the regularised gradient
+    norm. Freezing g, the right hand side is a linear operator -L, with L
+    positive semi-definite. The central differences satisfy
+    ‖A_1‖, ‖A_2‖ ≤ 1 / dxy and ‖A_3‖ ≤ 1 / dθ, so that
+        ‖L‖ ≤ (G_inv[0] / dxy**2 + G_inv[1] / dxy**2 + G_inv[2] / dθ**2) / g_min,
+    and forward Euler is stable if dt ≤ 2 / ‖L‖.
+
+    Since g vanishes in flat regions, there is no timestep that is stable for
+    all images. Due to the nonlinearity, the scheme does not blow up even if
+    this bound is violated, but instead small oscillations appear in flat
+    regions. The default `g_min` of 1/4 gives the standard explicit diffusion
+    bound 1 / (2 Σ_i G_inv[i] / h_i**2).
 
     Args:
         `dxy`: step size in x and y direction, taking values greater than 0.
         `dθ`: step size in θ direction, taking values greater than 0.
         `G_inv`: tuple[float, float, float] of constants of the inverse of the
           diagonal metric tensor with respect to left invariant basis.
+      Optional:
+        `g_min`: lower bound of the regularised gradient norm for which the
+          scheme is guaranteed to be stable, taking values greater than 0.
+          Defaults to 1/4.
 
     Returns:
         timestep, taking values greater than 0.
     """
-    return dxy**2 * dθ / (2 * ((G_inv[0] + G_inv[1]) * dxy + G_inv[2] * dθ))
+    return 2 * g_min / ((G_inv[0] + G_inv[1]) / dxy**2 + G_inv[2] / dθ**2)

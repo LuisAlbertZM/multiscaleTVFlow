@@ -11,15 +11,7 @@ from math import ceil, pi
 from tqdm.auto import tqdm
 from msrtv.utils import gaussian_blur_4d_separable, get_A_kernels, PSNR
 from msrtv.SIM2.simoncellitransform import inverse_wavelet_transform
-from dataclasses import dataclass
-
-
-@dataclass
-class GroundTruth:
-    ground_truth: torch.Tensor
-    u_low: torch.Tensor
-    filters: torch.Tensor
-    lowpass: torch.Tensor
+from msrtv.SIM2.utils import GroundTruth
 
 
 def denoise(
@@ -32,7 +24,7 @@ def denoise(
     σ_a: float,
     ground_truth: GroundTruth | None = None,
     max_val: float = 255.
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, list[float]]:
     """
     Perform TV flow enhancing in SIM(2), using an adaptation of the algorithm
     described by Smets et al.[1]
@@ -70,10 +62,8 @@ def denoise(
     """
     S = u.shape[-4]
     Or = u.shape[-3]
-    dθ = 2 * pi / (Or - 1)
-    da = min(a - 1., 1. - 1./a)
-    max_a = a**(S-1)
-    dt_opt = compute_timestep(1.0, dθ, da, G_inv, max_a)
+    dθ = 2 * pi / Or
+    dt_opt = compute_timestep(1.0, dθ, G_inv, a, S)
     n = ceil(T / dt_opt)
     dt = T / n
 
@@ -101,7 +91,7 @@ def step_TV(
 ) -> torch.Tensor:
     S, Or, H, W = u.shape
     k_A1, k_A2 = get_A_kernels(Or, u.device)
-    dθ = 2 * torch.pi / (Or - 1)
+    dθ = 2 * torch.pi / Or
     scales = (a ** torch.arange(S, device=u.device))
 
     u_reshaped = u.reshape(1, S * Or, H, W)
@@ -173,37 +163,79 @@ def step_TV(
         
     )
 
+def _scale_operator_norm(a: float, S: int) -> float:
+    """
+    Compute the spectral norm of the linear operator in the scale direction
+    of `step_TV`, i.e. v -> -(A4 v - 2 v) composed with A4, where A4 is the
+    scale derivative with forward step a - 1, backward step 1 - 1/a, and
+    one-sided differences at the boundaries.
+    """
+    if S < 2:
+        return 0.
+    dscale_forward = a - 1.
+    dscale_backward = 1. - 1. / a
+    A4 = torch.zeros((S, S), dtype=torch.float64)
+    A4[0, 0], A4[0, 1] = -1. / dscale_forward, 1. / dscale_forward
+    A4[-1, -2], A4[-1, -1] = -1. / dscale_backward, 1. / dscale_backward
+    for s in range(1, S - 1):
+        A4[s, s + 1] += 1. / (2 * dscale_forward)
+        A4[s, s] += 1. / (2 * dscale_backward) - 1. / (2 * dscale_forward)
+        A4[s, s - 1] -= 1. / (2 * dscale_backward)
+    divergence_4 = A4 - 2 * torch.eye(S, dtype=torch.float64)
+    return torch.linalg.matrix_norm(divergence_4 @ A4, ord=2).item()
+
+
 def compute_timestep(
     dxy: float,
     dθ: float,
-    da: float,
     G_inv: tuple[float, float, float, float],
-    max_a: float,
+    a: float,
+    S: int,
+    g_min: float = 0.25,
 ):
     """
     Compute timestep to solve TV flow.
 
+    `step_TV` is a forward Euler step of
+        ∂u/∂t = Σ_i div_i (G_inv[i] A_i u / g),
+    where the A_i are finite differences and g is the regularised gradient
+    norm. Freezing g, the right hand side is a linear operator -L. At scale
+    index s, the spatial central differences are multiplied by a**s, so that
+    ‖A_1‖, ‖A_2‖ ≤ a**s / dxy, while ‖A_3‖ ≤ 1 / dθ.
+
+    Since g vanishes in flat regions, there is no timestep that is stable for
+    all images. Due to the nonlinearity, the scheme does not blow up even if
+    the bound below is violated, but instead small oscillations appear in flat
+    regions. We therefore require stability only where the gradient is at
+    least `g_min` grey levels per pixel, as for SE(2). Because of the factor
+    a**s, this corresponds to g ≥ a**s g_min at scale index s, so that
+        ‖L‖ ≤ ((G_inv[0] + G_inv[1]) a**(S-1) / dxy**2
+               + G_inv[2] / dθ**2 + G_inv[3] ‖L_4‖) / g_min,
+    with L_4 the operator in the scale direction, and forward Euler is stable
+    if dt ≤ 2 / ‖L‖. For S = 1, this reduces to the timestep for SE(2).
+
+    The default `g_min` of 1/4 matches the standard explicit diffusion bound
+    1 / (2 Σ_i G_inv[i] / h_i**2) for the finest scale.
+
     Args:
         `dxy`: step size in x and y direction, taking values greater than 0.
         `dθ`: step size in θ direction, taking values greater than 0.
-        `ds`: step size in a direction, taking values greater than 0.
-        `G_inv`: tuple[float, float, float, float] of constants of the inverse of the
-          diagonal metric tensor with respect to left invariant basis.
+        `G_inv`: tuple[float, float, float, float] of constants of the inverse
+          of the diagonal metric tensor with respect to left invariant basis.
+        `a`: dilation factor between consecutive scales, taking values greater
+          than 1.
+        `S`: number of scales.
+      Optional:
+        `g_min`: lower bound of the regularised gradient norm, in grey levels
+          per pixel, for which the scheme is guaranteed to be stable, taking
+          values greater than 0. Defaults to 1/4.
 
     Returns:
         timestep, taking values greater than 0.
     """
-    # dt = 1.0 / (
-    #     2.0 * (
-    #         G_inv[0] * max_a**2 / dxy**2 +
-    #         G_inv[1] * max_a**2 / dxy**2 +
-    #         G_inv[2] / dθ**2 +
-    #         G_inv[3] / da**2
-    #     )
-    # )
-    return dxy**2 * dθ * da / (2 * (
-        G_inv[0] * dxy +
-        G_inv[1] * dxy +
-        G_inv[2] * dθ +
-        G_inv[3] * da
-    ))
+    max_a = a**(S - 1)
+    return 2 * g_min / (
+        (G_inv[0] + G_inv[1]) * max_a / dxy**2
+        + G_inv[2] / dθ**2
+        + G_inv[3] * _scale_operator_norm(a, S)
+    )
