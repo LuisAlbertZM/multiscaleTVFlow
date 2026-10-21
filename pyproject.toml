@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "msrtv"
+version = "0.1.0"
+description = "Multiscale TV flow on SE(2) and SIM(2), using PyTorch."
+authors = [{ name = "Finn Sherry" }]
+requires-python = ">=3.10"
+dependencies = ["torch", "tqdm"]
+
+[tool.setuptools.packages.find]
+include = ["msrtv*"]

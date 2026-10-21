@@ -1,6 +1,6 @@
 """
 SE2TVFlowPyTorch
-=====================
+================
 
 Compute the SE(2) TV Flow, using PyTorch.
 """
