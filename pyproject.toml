@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "msrtv"
 version = "0.1.0"
-description = "Multiscale TV flow on SE(2) and SIM(2), using PyTorch."
+description = "Multi-Scale Roto-Translational Total Variation Flow."
 authors = [{ name = "Finn Sherry" }]
 requires-python = ">=3.10"
-dependencies = ["torch", "tqdm"]
+dependencies = ["torch", "scipy", "tqdm"]
 
 [tool.setuptools.packages.find]
 include = ["msrtv*"]

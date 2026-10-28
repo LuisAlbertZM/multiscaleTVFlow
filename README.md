@@ -16,6 +16,12 @@ To reproduce the experiments, one additionally needs (in brackets the versions t
 * `matplotlib` (3.11.1)
 * `bm3d` (4.0.3)
 
+The code can be installed as a package into your python environment by executing
+```
+pip install -e .
+```
+in the root directory of this repository. 
+
 ## Functionality
 The main functionality is as follows:
 | Method | Description |
