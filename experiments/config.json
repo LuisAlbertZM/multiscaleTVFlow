@@ -1,71 +1,24 @@
 {
-    "spiral": {
-        "ground_truth": "spiral.png",
-        "noisy": "noisyspiral.png",
-        "lambda": 50.0,
-        "SE2": {
-            "xi": 0.51,
-            "σ_s": 1.0,
-            "σ_o": 0.5,
-            "T": 2.0
-        },
-        "SIM2": {
-            "xi": 0.51,
-            "phi": 0.01,
-            "a": 2.0,
-            "σ_s": 1.0,
-            "σ_o": 0.5,
-            "σ_a": 0.125,
-            "cut_freq": 0.5,
-            "T": 2.0
-        },
-        "bm3d_max_scale": 50.0,
-        "bm3d_step_scale": 5.0
+    "ground_truth": "spiral.png",
+    "sigma_noise": 50,
+    "rho_noise": 1,
+    "lambda": 50.0,
+    "SE2": {
+        "xi": 0.51,
+        "σ_s": 1.0,
+        "σ_o": 0.5,
+        "T": 2.0
     },
-    "monalisa": {
-        "ground_truth": "monalisa.png",
-        "noisy": "noisymonalisa.png",
-        "lambda": 50.0,
-        "SE2": {
-            "xi": 0.51,
-            "σ_s": 1.0,
-            "σ_o": 0.5,
-            "T": 1.0
-        },
-        "SIM2": {
-            "xi": 0.51,
-            "phi": 0.01,
-            "a": 2.0,
-            "σ_s": 1.0,
-            "σ_o": 0.5,
-            "σ_a": 0.5,
-            "cut_freq": 0.5,
-            "T": 1.0
-        },
-        "bm3d_max_scale": 50.0,
-        "bm3d_step_scale": 5.0
+    "SIM2": {
+        "xi": 0.51,
+        "phi": 0.01,
+        "a": 2.0,
+        "σ_s": 1.0,
+        "σ_o": 0.5,
+        "σ_a": 0.125,
+        "cut_freq": 0.5,
+        "T": 2.0
     },
-    "collagen": {
-        "ground_truth": "collagen.png",
-        "noisy": "noisycollagen.png",
-        "lambda": 50.0,
-        "SE2": {
-            "xi": 0.51,
-            "σ_s": 1.0,
-            "σ_o": 0.5,
-            "T": 1.0
-        },
-        "SIM2": {
-            "xi": 0.51,
-            "phi": 0.01,
-            "a": 2.0,
-            "σ_s": 1.0,
-            "σ_o": 0.5,
-            "σ_a": 0.5,
-            "cut_freq": 0.5,
-            "T": 1.0
-        },
-        "bm3d_max_scale": 50.0,
-        "bm3d_step_scale": 5.0
-    }
+    "bm3d_max_scale": 50.0,
+    "bm3d_step_scale": 5.0
 }

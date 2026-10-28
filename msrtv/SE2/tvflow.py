@@ -85,7 +85,6 @@ def step_TV(
         mode="circular",
     ).squeeze()
     A3_u = (u_padded[2:] - u_padded[:-2]) / (2.0 * dθ)
-    #print(A1_u.max(), A2_u.max(), A3_u.max())
 
     grad_norm = (G_inv[0] * A1_u**2 + G_inv[1] * A2_u**2 + G_inv[2] * A3_u**2).sqrt()
     grad_norm = gaussian_blur_3d_separable(grad_norm, (σ_s, σ_s, σ_o))  # + 1e-9
@@ -119,7 +118,6 @@ def compute_timestep(
     dxy: float,
     dθ: float,
     G_inv: tuple[float, float, float],
-    g_min: float = 0.25,
 ):
     """
     Compute timestep to solve TV flow.
@@ -144,12 +142,8 @@ def compute_timestep(
         `dθ`: step size in θ direction, taking values greater than 0.
         `G_inv`: tuple[float, float, float] of constants of the inverse of the
           diagonal metric tensor with respect to left invariant basis.
-      Optional:
-        `g_min`: lower bound of the regularised gradient norm for which the
-          scheme is guaranteed to be stable, taking values greater than 0.
-          Defaults to 1/4.
 
     Returns:
         timestep, taking values greater than 0.
     """
-    return 2 * g_min / ((G_inv[0] + G_inv[1]) / dxy**2 + G_inv[2] / dθ**2)
+    return 2 / ((G_inv[0] + G_inv[1]) / dxy**2 + G_inv[2] / dθ**2)

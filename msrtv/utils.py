@@ -83,6 +83,29 @@ def gaussian_blur_3d_separable(
     return x[0, 0]
 
 
+def gaussian_blur_2d_separable(
+    x: torch.Tensor,
+    sigmas: tuple[float, float],
+    truncate: float = 4.0
+) -> torch.Tensor:
+    kernel_size = [1 + 2 * ceil(truncate * sigma) for sigma in sigmas]
+
+    x = x[None, None]
+
+    kx = gaussian_kernel_1d(kernel_size[0], sigmas[0], x.device, x.dtype)
+    ky = gaussian_kernel_1d(kernel_size[1], sigmas[1], x.device, x.dtype)
+
+    kx = kx.view(1, 1, 1, -1)
+    ky = ky.view(1, 1, -1, 1)
+
+    x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0), mode="reflect")
+    x = F.conv2d(x, kx)
+    x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2), mode="reflect")
+    x = F.conv2d(x, ky)
+
+    return x[0, 0]
+
+
 @lru_cache
 def gaussian_kernel_1d(
     kernel_size: int,

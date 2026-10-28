@@ -6,7 +6,7 @@ Perform coefficient thresholding on a continuous wavelet transform.
 """
 
 import torch
-import torch.nn.functional as F
+from torch.nn.functional import relu
 from msrtv.utils import PSNR
 from msrtv.SIM2.simoncellitransform import inverse_wavelet_transform
 from msrtv.SIM2.utils import GroundTruth
@@ -21,13 +21,13 @@ def denoise(
 ) -> tuple[torch.Tensor, list[float]]:
     PSNRs = []
     for q in tqdm(quantiles):
-        thresholds = torch.quantile(
+        threshold = torch.quantile(
             u.abs().flatten(start_dim=-2),
             q=q,
             dim=-1,
             keepdim=True,
         ).unsqueeze(-1)
-        denoised = F.relu(u - thresholds) - F.relu(-u - thresholds)
+        denoised = relu(u - threshold) - relu(-u - threshold)
 
         if ground_truth is not None:
             PSNRs.append(PSNR(

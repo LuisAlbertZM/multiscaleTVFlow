@@ -1,0 +1,18 @@
+{
+    "text.usetex": true,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern"],
+    "font.size": 10.0,
+    "text.latex.preamble": "\\usepackage{lmodern} \\usepackage{amssymb} \\usepackage{amsmath}",
+    "image.cmap": "gray",
+    "figure.constrained_layout.use": true,
+    "xtick.top": false,
+    "xtick.bottom": false,
+    "ytick.left": false,
+    "ytick.right": false,
+    "xtick.labeltop": false,
+    "xtick.labelbottom": false,
+    "ytick.labelleft": false,
+    "ytick.labelright": false,
+    "latex_line_width": 4.804
+}

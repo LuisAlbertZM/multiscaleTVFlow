@@ -191,7 +191,6 @@ def compute_timestep(
     G_inv: tuple[float, float, float, float],
     a: float,
     S: int,
-    g_min: float = 0.25,
 ):
     """
     Compute timestep to solve TV flow.
@@ -225,16 +224,12 @@ def compute_timestep(
         `a`: dilation factor between consecutive scales, taking values greater
           than 1.
         `S`: number of scales.
-      Optional:
-        `g_min`: lower bound of the regularised gradient norm, in grey levels
-          per pixel, for which the scheme is guaranteed to be stable, taking
-          values greater than 0. Defaults to 1/4.
 
     Returns:
         timestep, taking values greater than 0.
     """
     max_a = a**(S - 1)
-    return 2 * g_min / (
+    return 2 / (
         (G_inv[0] + G_inv[1]) * max_a / dxy**2
         + G_inv[2] / dθ**2
         + G_inv[3] * _scale_operator_norm(a, S)
