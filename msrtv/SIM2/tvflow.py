@@ -2,7 +2,24 @@
 tvflow
 ======
 
-Compute the SIM(2) TV Flow, using PyTorch.
+Compute the SIM(2) TV Flow, using PyTorch.[1] The primary methods are:
+  1. `denoise`: perform multi-scale roto-translational TV flow on SIM(2) for
+  denoising,[1] extending roto-translational total variation (RT-TV) flow on
+  SE(2).[2][3]
+  2. `compute_timestep`: compute a timestep for which the explicit scheme is
+  stable.
+
+References:
+  [1]: "Multi-Scale Roto-Translational Total Variation Flow."
+  [2]: A. Chambolle and Th. Pock.
+    "Total roto-translational variation." In: Numerische Mathematik 142
+    (2019), pp. 611--666.
+    DOI:10.1007/s00211-019-01026-w.
+  [3]: B.M.N. Smets, J.W. Portegies, E. St-Onge, and R. Duits.
+    "Total Variation and Mean Curvature PDEs on the Homogeneous Space of
+    Positions and Orientations." In: Journal of Mathematical Imaging and
+    Vision 63 (2021), pp. 237--262.
+    DOI:10.1007/s10851-020-00991-4.
 """
 
 import torch
@@ -26,8 +43,9 @@ def denoise(
     max_val: float = 255.
 ) -> tuple[torch.Tensor, list[float]]:
     """
-    Perform TV flow enhancing in SIM(2), using an adaptation of the algorithm
-    described by Smets et al.[1]
+    Perform multi-scale roto-translational TV flow enhancing in SIM(2),[1]
+    extending roto-translational total variation (RT-TV) flow[2] using an
+    adaptation of the algorithm described by Smets et al.[3]
 
     Args:
         `u`: torch.Tensor initial condition, with shape [S, Or, H, W].
@@ -54,9 +72,14 @@ def denoise(
         `T`.
 
     References:
-        [1]: B.M.N. Smets, J.W. Portegies, E. St-Onge, and R. Duits.
+        [1]: "Multi-Scale Roto-Translational Total Variation Flow."
+        [2]: A. Chambolle and Th. Pock.
+          "Total roto-translational variation." In: Numerische Mathematik 142
+          (2019), pp. 611--666.
+          DOI:10.1007/s00211-019-01026-w.
+        [3]: B.M.N. Smets, J.W. Portegies, E. St-Onge, and R. Duits.
           "Total Variation and Mean Curvature PDEs on the Homogeneous Space of
-          Positions and Orientations". In: Journal of Mathematical Imaging and
+          Positions and Orientations." In: Journal of Mathematical Imaging and
           Vision 63 (2021), pp. 237--262.
           DOI:10.1007/s10851-020-00991-4.
     """
@@ -173,6 +196,41 @@ def step_TV(
         
     )
 
+
+def compute_timestep(
+    dxy: float,
+    dθ: float,
+    G_inv: tuple[float, float, float, float],
+    a: float,
+    S: int,
+):
+    """
+    Compute timestep to solve multi-scale roto-translational TV flow.[1]
+
+    Args:
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in θ direction, taking values greater than 0.
+        `G_inv`: tuple[float, float, float, float] of constants of the inverse
+          of the diagonal metric tensor with respect to left invariant basis.
+        `a`: dilation factor between consecutive scales, taking values greater
+          than 1.
+        `S`: number of scales.
+
+    Returns:
+        timestep, taking values greater than 0.
+
+    References:
+        [1]: "Multi-Scale Roto-Translational Total Variation Flow."
+          In: Scale Space and Variational Methods in Computer Vision (2027).
+    """
+    max_a = a**(S - 1)
+    return 2 / (
+        (G_inv[0] + G_inv[1]) * max_a / dxy**2
+        + G_inv[2] / dθ**2
+        + G_inv[3] * _scale_operator_norm(a, S)
+    )
+
+
 def _scale_operator_norm(a: float, S: int) -> float:
     """
     Compute the spectral norm of the linear operator in the scale direction
@@ -193,54 +251,3 @@ def _scale_operator_norm(a: float, S: int) -> float:
         A4[s, s - 1] -= 1. / (2 * dscale_backward)
     divergence_4 = A4 - 2 * torch.eye(S, dtype=torch.float64)
     return torch.linalg.matrix_norm(divergence_4 @ A4, ord=2).item()
-
-
-def compute_timestep(
-    dxy: float,
-    dθ: float,
-    G_inv: tuple[float, float, float, float],
-    a: float,
-    S: int,
-):
-    """
-    Compute timestep to solve TV flow.
-
-    `step_TV` is a forward Euler step of
-        ∂u/∂t = Σ_i div_i (G_inv[i] A_i u / g),
-    where the A_i are finite differences and g is the regularised gradient
-    norm. Freezing g, the right hand side is a linear operator -L. At scale
-    index s, the spatial central differences are multiplied by a**s, so that
-    ‖A_1‖, ‖A_2‖ ≤ a**s / dxy, while ‖A_3‖ ≤ 1 / dθ.
-
-    Since g vanishes in flat regions, there is no timestep that is stable for
-    all images. Due to the nonlinearity, the scheme does not blow up even if
-    the bound below is violated, but instead small oscillations appear in flat
-    regions. We therefore require stability only where the gradient is at
-    least `g_min` grey levels per pixel, as for SE(2). Because of the factor
-    a**s, this corresponds to g ≥ a**s g_min at scale index s, so that
-        ‖L‖ ≤ ((G_inv[0] + G_inv[1]) a**(S-1) / dxy**2
-               + G_inv[2] / dθ**2 + G_inv[3] ‖L_4‖) / g_min,
-    with L_4 the operator in the scale direction, and forward Euler is stable
-    if dt ≤ 2 / ‖L‖. For S = 1, this reduces to the timestep for SE(2).
-
-    The default `g_min` of 1/4 matches the standard explicit diffusion bound
-    1 / (2 Σ_i G_inv[i] / h_i**2) for the finest scale.
-
-    Args:
-        `dxy`: step size in x and y direction, taking values greater than 0.
-        `dθ`: step size in θ direction, taking values greater than 0.
-        `G_inv`: tuple[float, float, float, float] of constants of the inverse
-          of the diagonal metric tensor with respect to left invariant basis.
-        `a`: dilation factor between consecutive scales, taking values greater
-          than 1.
-        `S`: number of scales.
-
-    Returns:
-        timestep, taking values greater than 0.
-    """
-    max_a = a**(S - 1)
-    return 2 / (
-        (G_inv[0] + G_inv[1]) * max_a / dxy**2
-        + G_inv[2] / dθ**2
-        + G_inv[3] * _scale_operator_norm(a, S)
-    )

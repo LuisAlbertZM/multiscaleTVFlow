@@ -2,7 +2,20 @@
 tvflow
 ======
 
-Compute the SE(2) TV Flow, using PyTorch.
+Compute the SE(2) TV Flow, using PyTorch. The primary method is:
+  1. `denoise`: perform roto-translational total variation (RT-TV) flow on
+  SE(2) for denoising.[1][2]
+
+References:
+  [1]: A. Chambolle and Th. Pock.
+    "Total roto-translational variation." In: Numerische Mathematik 142
+    (2019), pp. 611--666.
+    DOI:10.1007/s00211-019-01026-w.
+  [2]: B.M.N. Smets, J.W. Portegies, E. St-Onge, and R. Duits.
+    "Total Variation and Mean Curvature PDEs on the Homogeneous Space of
+    Positions and Orientations." In: Journal of Mathematical Imaging and
+    Vision 63 (2021), pp. 237--262.
+    DOI:10.1007/s10851-020-00991-4.
 """
 
 import torch
@@ -22,8 +35,8 @@ def denoise(
     max_val: float = 255.
 ) -> tuple[torch.Tensor, list[float]]:
     """
-    Perform TV flow enhancing in SE(2), using an adaptation of the algorithm
-    described by Smets et al.[1]
+    Perform roto-translational total variation (RT-TV) flow[1] enhancing in
+    SE(2), using an adaptation of the algorithm described by Smets et al.[2]
 
     Args:
         `u`: torch.Tensor initial condition, with shape [Or, H, W].
@@ -43,9 +56,13 @@ def denoise(
         `T`.
 
     References:
-        [1]: B.M.N. Smets, J.W. Portegies, E. St-Onge, and R. Duits.
+        [1]: A. Chambolle and Th. Pock.
+          "Total roto-translational variation." In: Numerische Mathematik 142
+          (2019), pp. 611--666.
+          DOI:10.1007/s00211-019-01026-w.
+        [2]: B.M.N. Smets, J.W. Portegies, E. St-Onge, and R. Duits.
           "Total Variation and Mean Curvature PDEs on the Homogeneous Space of
-          Positions and Orientations". In: Journal of Mathematical Imaging and
+          Positions and Orientations." In: Journal of Mathematical Imaging and
           Vision 63 (2021), pp. 237--262.
           DOI:10.1007/s10851-020-00991-4.
     """
