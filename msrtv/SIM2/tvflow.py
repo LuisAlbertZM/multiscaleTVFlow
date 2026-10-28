@@ -67,7 +67,17 @@ def denoise(
     n = ceil(T / dt_opt)
     dt = T / n
 
-    PSNRs = []
+    if ground_truth is not None:
+        PSNRs = [
+            PSNR(
+                inverse_wavelet_transform(u, ground_truth.u_low, ground_truth.filters, ground_truth.lowpass),
+                ground_truth.ground_truth,
+                max_val=max_val
+            )
+        ]
+    else:
+        PSNRs = []
+        
     for _ in tqdm(range(n)):
         u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a)
         if ground_truth is not None:

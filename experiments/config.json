@@ -1,24 +1,23 @@
 {
-    "ground_truth": "spiral.png",
+    "ground_truth": "collagen.png",
     "sigma_noise": 50,
     "rho_noise": 1,
-    "lambda": 50.0,
     "SE2": {
-        "xi": 0.51,
+        "xi": 0.01,
         "σ_s": 1.0,
         "σ_o": 0.5,
-        "T": 2.0
+        "T": 0.03
     },
     "SIM2": {
-        "xi": 0.51,
-        "phi": 0.01,
-        "a": 2.0,
+        "xi": 0.022,
+        "phi": 0.098,
+        "a": 2,
         "σ_s": 1.0,
         "σ_o": 0.5,
-        "σ_a": 0.125,
+        "σ_a": 0.5,
         "cut_freq": 0.5,
-        "T": 2.0
+        "T": 0.02
     },
     "bm3d_max_scale": 50.0,
-    "bm3d_step_scale": 5.0
+    "bm3d_step_scale": 0.5
 }

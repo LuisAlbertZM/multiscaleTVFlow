@@ -14,5 +14,6 @@
     "xtick.labelbottom": false,
     "ytick.labelleft": false,
     "ytick.labelright": false,
-    "latex_line_width": 4.804
+    "latex_line_width": 4.804,
+    "notebook_width": 10
 }
