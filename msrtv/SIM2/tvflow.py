@@ -152,7 +152,7 @@ def step_TV(
     u_padded = torch.cat((u[:1], u, u[-1:]), dim=0)
     dscale_forward = a - 1.
     dscale_backward = 1. - 1. / a
-    if not forward_derivatives:
+    if forward_derivatives:
         A4_u = (u_padded[2:] - u_padded[1:-1]) / dscale_forward
     else:
         A4_u = (u_padded[1:-1] - u_padded[:-2]) / dscale_backward
@@ -184,7 +184,7 @@ def step_TV(
         divergence_normalised_grad_3 = (normalised_A3_u_padded[:, 1:-1] - normalised_A3_u_padded[:, :-2]) / dθ
 
     normalised_A4_u_padded = F.pad(normalised_A4_u, (0, 0, 0, 0, 0, 0, 1, 1))
-    if not forward_derivatives:
+    if forward_derivatives:
         divergence_normalised_grad_4 = (normalised_A4_u_padded[1:-1] - a**2 * normalised_A4_u_padded[:-2]) / dscale_forward
     else:
         divergence_normalised_grad_4 = (normalised_A4_u_padded[2:] / a**2 - normalised_A4_u_padded[1:-1]) / dscale_backward
