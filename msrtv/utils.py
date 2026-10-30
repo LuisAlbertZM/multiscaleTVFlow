@@ -20,36 +20,17 @@ def gaussian_blur_4d_separable(
     ky = gaussian_kernel_1d(kernel_size[1], sigmas[1], x.device, x.dtype).view(1, 1, 1, -1, 1)
     ky = ky.repeat(x.shape[1], 1, 1, 1, 1)
 
-    kθ = gaussian_kernel_1d(kernel_size[2], sigmas[2], x.device, x.dtype).view(1, 1, -1, 1, 1)
-    kθ = kθ.repeat(x.shape[1], 1, 1, 1, 1)
-   
     x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0, 0, 0), mode="reflect")
     x = F.conv3d(x, kx, groups=x.shape[1])
 
     x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2, 0, 0), mode="reflect")
     x = F.conv3d(x, ky, groups=x.shape[1])
 
-    x = F.pad(x, (0, 0, 0, 0, kernel_size[2] // 2, kernel_size[2] // 2), mode="circular")
-    x = F.conv3d(x, kθ, groups=x.shape[1])
-
     x = x[0]
 
-    ka = gaussian_kernel_1d(kernel_size[3], sigmas[3], x.device, x.dtype).view(1, 1, -1)
-
-    x_scale = (x.permute(1, 2, 3, 0).reshape(-1, 1, x.shape[0]))
-    x_scale = F.pad(x_scale, (kernel_size[3] // 2, kernel_size[3] // 2), mode="reflect")
-
-    x_scale = F.conv1d(x_scale, ka)
-
-    x = (
-        x_scale.reshape(
-            x.shape[1],
-            x.shape[2],
-            x.shape[3],
-            x.shape[0],
-        )
-        .permute(3, 0, 1, 2)
-    )
+    kθ = gaussian_blur_matrix_circular(x.shape[1], kernel_size[2], sigmas[2], x.device, x.dtype)
+    ka = gaussian_blur_matrix_reflect(x.shape[0], kernel_size[3], sigmas[3], x.device, x.dtype)
+    x = torch.einsum("ts,ro,so...->tr...", ka, kθ, x)
 
     return x
 
@@ -119,6 +100,54 @@ def gaussian_kernel_1d(
     kernel = torch.exp(-(coords**2) / (2 * sigma**2))
     kernel /= kernel.sum()
     return kernel
+
+
+@lru_cache
+def gaussian_blur_matrix_reflect(
+    n: int,
+    kernel_size: int,
+    sigma: float,
+    device: torch.DeviceObjType | str | None = None,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    """
+    Matrix of 1D Gaussian blurring of a signal of length `n` with reflecting
+    boundary conditions, i.e. as `F.pad(mode="reflect")` followed by
+    `F.conv1d`. Unlike `F.pad`, it allows kernels wider than the signal.
+    """
+    kernel = gaussian_kernel_1d(kernel_size, sigma, device, dtype)
+    offsets = torch.arange(kernel_size, device=device) - kernel_size // 2
+    indices = torch.arange(n, device=device)[:, None] + offsets[None]
+    if n > 1:
+        period = 2 * (n - 1)
+        indices = indices % period
+        indices = torch.where(indices >= n, period - indices, indices)
+    else:
+        indices = torch.zeros_like(indices)
+    matrix = torch.zeros(n, n, device=device, dtype=dtype)
+    matrix.scatter_add_(1, indices, kernel.expand(n, -1).contiguous())
+    return matrix
+
+
+@lru_cache
+def gaussian_blur_matrix_circular(
+    n: int,
+    kernel_size: int,
+    sigma: float,
+    device: torch.DeviceObjType | str | None = None,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    """
+    Matrix of 1D Gaussian blurring of a signal of length `n` with periodic
+    boundary conditions, i.e. as `F.pad(mode="circular")` followed by
+    `F.conv1d`. Unlike `F.pad`, it allows kernels wider than the signal.
+    """
+    kernel = gaussian_kernel_1d(kernel_size, sigma, device, dtype)
+    offsets = torch.arange(kernel_size, device=device) - kernel_size // 2
+    indices = (torch.arange(n, device=device)[:, None] + offsets[None]) % n
+    matrix = torch.zeros(n, n, device=device, dtype=dtype)
+    matrix.scatter_add_(1, indices, kernel.expand(n, -1).contiguous())
+    return matrix
 
 
 @lru_cache

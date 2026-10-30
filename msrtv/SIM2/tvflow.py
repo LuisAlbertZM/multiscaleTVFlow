@@ -114,7 +114,6 @@ def denoise(
 
     return u, PSNRs
 
-
 def step_TV(
     u: torch.Tensor, 
     dt: float,
@@ -167,11 +166,11 @@ def step_TV(
 
     normalised_A1_u_pad = F.pad(normalised_A1_u.reshape(1, S * Or, H, W), (1, 1, 1, 1), mode="constant")
     divergence_normalised_grad_1 =  F.conv2d(normalised_A1_u_pad, k_A1_div.repeat(S, 1, 1, 1), groups=S * Or)
-    divergence_normalised_grad_1 = scales.view(S,1,1,1) * divergence_normalised_grad_1.reshape(S, Or, H, W)
+    divergence_normalised_grad_1 = scales.view(S, 1, 1, 1) * divergence_normalised_grad_1.reshape(S, Or, H, W)
 
     normalised_A2_u_pad = F.pad(normalised_A2_u.reshape(1, S * Or, H, W), (1, 1, 1, 1), mode="constant")
     divergence_normalised_grad_2 = F.conv2d(normalised_A2_u_pad, k_A2_div.repeat(S, 1, 1, 1), groups=S * Or)
-    divergence_normalised_grad_2 = scales.view(S,1,1,1) * divergence_normalised_grad_2.reshape(S, Or, H, W)
+    divergence_normalised_grad_2 = scales.view(S, 1, 1, 1) * divergence_normalised_grad_2.reshape(S, Or, H, W)
 
     normalised_A3_u_padded = F.pad(
         normalised_A3_u[None],
@@ -196,6 +195,7 @@ def step_TV(
         + divergence_normalised_grad_4
         
     )
+
 
 
 def compute_timestep(
