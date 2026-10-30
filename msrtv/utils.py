@@ -46,22 +46,21 @@ def gaussian_blur_3d_separable(
 
     kx = gaussian_kernel_1d(kernel_size[0], sigmas[0], x.device, x.dtype)
     ky = gaussian_kernel_1d(kernel_size[1], sigmas[1], x.device, x.dtype)
-    kz = gaussian_kernel_1d(kernel_size[2], sigmas[2], x.device, x.dtype)
 
     kx = kx.view(1, 1, 1, 1, -1)
     ky = ky.view(1, 1, 1, -1, 1)
-    kz = kz.view(1, 1, -1, 1, 1)
 
     x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0, 0, 0), mode="reflect")
     x = F.conv3d(x, kx)
     x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2, 0, 0), mode="reflect")
     x = F.conv3d(x, ky)
-    x = F.pad(
-        x, (0, 0, 0, 0, kernel_size[2] // 2, kernel_size[2] // 2), mode="circular"
-    )
-    x = F.conv3d(x, kz)
 
-    return x[0, 0]
+    x = x[0, 0]
+
+    kθ = gaussian_blur_matrix_circular(x.shape[0], kernel_size[2], sigmas[2], x.device, x.dtype)
+    x = torch.einsum("ro,o...->r...", kθ, x)
+
+    return x
 
 
 def gaussian_blur_2d_separable(
