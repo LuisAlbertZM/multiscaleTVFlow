@@ -101,8 +101,10 @@ def denoise(
     else:
         PSNRs = []
         
+    forward_derivatives = True
     for _ in tqdm(range(n)):
-        u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a)
+        u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a, forward_derivatives)
+        forward_derivatives = not forward_derivatives
         if ground_truth is not None:
             PSNRs.append(PSNR(
                 inverse_wavelet_transform(u, ground_truth.u_low, ground_truth.filters, ground_truth.lowpass),
@@ -121,36 +123,39 @@ def step_TV(
     σ_s: float,
     σ_o: float,
     σ_a: float,
+    forward_derivatives: bool,
 ) -> torch.Tensor:
     S, Or, H, W = u.shape
-    k_A1, k_A2 = get_A_kernels(Or, u.device)
+    k_A1_grad, k_A2_grad = get_A_kernels(Or, u.device, forward_derivatives)
+    k_A1_div, k_A2_div = get_A_kernels(Or, u.device, not forward_derivatives)
     dθ = 2 * torch.pi / Or
     scales = (a ** torch.arange(S, device=u.device))
 
     u_reshaped = u.reshape(1, S * Or, H, W)
     u_pad = F.pad(u_reshaped, (1, 1, 1, 1), mode="replicate")
-    A1_u = F.conv2d(u_pad, k_A1.repeat(S, 1, 1, 1), groups=S * Or)
-    A2_u = F.conv2d(u_pad, k_A2.repeat(S, 1, 1, 1), groups=S * Or)
+    A1_u = F.conv2d(u_pad, k_A1_grad.repeat(S, 1, 1, 1), groups=S * Or)
+    A2_u = F.conv2d(u_pad, k_A2_grad.repeat(S, 1, 1, 1), groups=S * Or)
 
-    A1_u = scales.view(S,1,1,1) * A1_u.reshape(S, Or, H, W)
-    A2_u = scales.view(S,1,1,1) * A2_u.reshape(S, Or, H, W)
+    A1_u = scales.view(S, 1, 1, 1) * A1_u.reshape(S, Or, H, W)
+    A2_u = scales.view(S, 1, 1, 1) * A2_u.reshape(S, Or, H, W)
 
-    u_padded = torch.cat(
-        [u[:, -1:], u, u[:, :1]],
-        dim=1,
-    )
-    A3_u = (u_padded[:, 2:] - u_padded[:, :-2]) / (2.0 * dθ)
+    u_padded = F.pad(
+        u[None],
+        pad=(0, 0, 0, 0, 1, 1),
+        mode="circular",
+    )[0]
+    if forward_derivatives:
+        A3_u = (u_padded[:, 2:] - u_padded[:, 1:-1]) / dθ
+    else:
+        A3_u = (u_padded[:, 1:-1] - u_padded[:, :-2]) / dθ
 
+    u_padded = torch.cat((u[:1], u, u[-1:]), dim=0)
     dscale_forward = a - 1.
     dscale_backward = 1. - 1. / a
-    A4_forward = (u[1:] - u[:-1]) / dscale_forward
-    A4_backward = (u[1:] - u[:-1]) / dscale_backward
-
-    A4_u = torch.zeros_like(u)
-
-    A4_u[1:-1] = (A4_forward[1:] + A4_backward[:-1]) / 2
-    A4_u[0]    = A4_forward[0]
-    A4_u[-1]   = A4_backward[-1]
+    if not forward_derivatives:
+        A4_u = (u_padded[2:] - u_padded[1:-1]) / dscale_forward
+    else:
+        A4_u = (u_padded[1:-1] - u_padded[:-2]) / dscale_backward
 
     grad_norm = (G_inv[0] * A1_u**2 + G_inv[1] * A2_u**2 + G_inv[2] * A3_u**2 + G_inv[3] * A4_u**2).sqrt()
     grad_norm = gaussian_blur_4d_separable(grad_norm, (σ_s, σ_s, σ_o, σ_a))  # + 1e-9
@@ -160,33 +165,29 @@ def step_TV(
     normalised_A3_u = G_inv[2] * A3_u / grad_norm
     normalised_A4_u = G_inv[3] * A4_u / grad_norm
 
-    normalised_A1_u_pad = F.pad(normalised_A1_u.reshape(1, S * Or, H, W), (1, 1, 1, 1), mode="replicate")
-    divergence_normalised_grad_1 =  F.conv2d(normalised_A1_u_pad, k_A1.repeat(S, 1, 1, 1), groups=S * Or)
+    normalised_A1_u_pad = F.pad(normalised_A1_u.reshape(1, S * Or, H, W), (1, 1, 1, 1), mode="constant")
+    divergence_normalised_grad_1 =  F.conv2d(normalised_A1_u_pad, k_A1_div.repeat(S, 1, 1, 1), groups=S * Or)
     divergence_normalised_grad_1 = scales.view(S,1,1,1) * divergence_normalised_grad_1.reshape(S, Or, H, W)
 
-    normalised_A2_u_pad = F.pad(normalised_A2_u.reshape(1, S * Or, H, W), (1, 1, 1, 1), mode="replicate")
-    divergence_normalised_grad_2 = F.conv2d(normalised_A2_u_pad, k_A2.repeat(S, 1, 1, 1), groups=S * Or)
+    normalised_A2_u_pad = F.pad(normalised_A2_u.reshape(1, S * Or, H, W), (1, 1, 1, 1), mode="constant")
+    divergence_normalised_grad_2 = F.conv2d(normalised_A2_u_pad, k_A2_div.repeat(S, 1, 1, 1), groups=S * Or)
     divergence_normalised_grad_2 = scales.view(S,1,1,1) * divergence_normalised_grad_2.reshape(S, Or, H, W)
 
-    normalised_A3_u_padded = torch.cat(
-        [
-            normalised_A3_u[:, -1:],
-            normalised_A3_u,
-            normalised_A3_u[:, :1],
-        ],
-        dim=1,
-    )
-    divergence_normalised_grad_3 = (
-        normalised_A3_u_padded[:, 2:] - normalised_A3_u_padded[:, :-2]
-    ) / (2.0 * dθ)
+    normalised_A3_u_padded = F.pad(
+        normalised_A3_u[None],
+        pad=(0, 0, 0, 0, 1, 1),
+        mode="circular",
+    )[0]
+    if not forward_derivatives:
+        divergence_normalised_grad_3 = (normalised_A3_u_padded[:, 2:] - normalised_A3_u_padded[:, 1:-1]) / dθ
+    else:
+        divergence_normalised_grad_3 = (normalised_A3_u_padded[:, 1:-1] - normalised_A3_u_padded[:, :-2]) / dθ
 
-    divergence_normalised_grad_4 = -2 * normalised_A4_u
-    A4_forward_normalised_A4_u = (normalised_A4_u[1:] - normalised_A4_u[:-1]) / dscale_forward
-    A4_backward_normalised_A4_u = (normalised_A4_u[1:] - normalised_A4_u[:-1]) / dscale_backward
-
-    divergence_normalised_grad_4[1:-1] += (A4_forward_normalised_A4_u[1:] + A4_backward_normalised_A4_u[:-1]) / 2
-    divergence_normalised_grad_4[0]    += A4_forward_normalised_A4_u[0]
-    divergence_normalised_grad_4[-1]   += A4_backward_normalised_A4_u[-1]
+    normalised_A4_u_padded = F.pad(normalised_A4_u, (0, 0, 0, 0, 0, 0, 1, 1))
+    if not forward_derivatives:
+        divergence_normalised_grad_4 = (normalised_A4_u_padded[1:-1] - a**2 * normalised_A4_u_padded[:-2]) / dscale_forward
+    else:
+        divergence_normalised_grad_4 = (normalised_A4_u_padded[2:] / a**2 - normalised_A4_u_padded[1:-1]) / dscale_backward
 
     return u + dt * (
         divergence_normalised_grad_1

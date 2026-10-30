@@ -122,7 +122,11 @@ def gaussian_kernel_1d(
 
 
 @lru_cache
-def get_A_kernels(Or: int, device: str | torch.DeviceObjType) -> tuple[torch.Tensor, torch.Tensor]:
+def get_A_kernels(
+    Or: int,
+    device: str | torch.DeviceObjType,
+    forward_derivatives: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
     θs = torch.arange(Or, device=device) * 2 * torch.pi / Or
 
     cos = torch.cos(θs)
@@ -148,15 +152,10 @@ def get_A_kernels(Or: int, device: str | torch.DeviceObjType) -> tuple[torch.Ten
 
         return k
 
-    A1_forward = bilinear_shift_kernel(cos, sin)
-    A1_backward = bilinear_shift_kernel(-cos, -sin)
-    k_A1 = (A1_forward - A1_backward) / 2.0
-
-    A2_forward = bilinear_shift_kernel(-sin, cos)
-    A2_backward = bilinear_shift_kernel(sin, -cos)
-    k_A2 = (A2_forward - A2_backward) / 2.0
-
-    return k_A1, k_A2
+    if forward_derivatives:
+        return bilinear_shift_kernel(cos, sin), bilinear_shift_kernel(-sin, cos)
+    else:
+        return -bilinear_shift_kernel(-cos, -sin), -bilinear_shift_kernel(sin, -cos)
 
 
 def PSNR(
