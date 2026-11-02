@@ -90,3 +90,20 @@ We compare to denoising by soft-thresholding the wavelet coefficients, as propos
   doi =          {10.1109/18.382009}
 }
 ```
+
+We also compare to BM3D by Dabov et al., using the `bm3d` package:
+
+<a id="5">[5]</a> Dabov, K., Foi, A., Katkovnik, V., Egiazarian, K. "Image Denoising by Sparse 3-D Transform-Domain Collaborative Filtering." IEEE Transactions on Image Processing (2007). https://doi.org/10.1109/TIP.2007.901238
+```
+@article{Dabov2007BM3D,
+  author =       {Dabov, Kostadin and Foi, Alessandro and Katkovnik, Vladimir and Egiazarian, Karen},
+  title =        {{Image Denoising by Sparse 3-D Transform-Domain Collaborative Filtering}},
+  journal =      {IEEE Transactions on Image Processing},
+  publisher =    {IEEE},
+  year =         {2007},
+  volume =       {16},
+  number =       {8},
+  pages =        {2080--2095},
+  doi =          {10.1109/TIP.2007.901238}
+}
+```
