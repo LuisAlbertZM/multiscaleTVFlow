@@ -97,6 +97,35 @@ def step_TV(
     σ_o: float,
     forward_derivatives: bool,
 ) -> torch.Tensor:
+    """
+    Perform a single explicit step of roto-translational TV flow.
+
+    The gradient is discretised with one-sided differences, and the divergence
+    is defined as minus its adjoint.[1]
+
+    Args:
+        `u`: torch.Tensor current state, with shape [Or, H, W].
+        `dt`: timestep, taking values greater than 0.
+        `G_inv`: tuple[float, float, float] of constants of the inverse of the
+          diagonal metric tensor with respect to left invariant basis.
+        `σ_s`: standard deviation of the spatial regularisation of the
+          gradient norm, taking values greater than 0.
+        `σ_o`: standard deviation of the orientational regularisation of the
+          gradient norm, taking values greater than 0.
+        `forward_derivatives`: whether the gradient uses forward differences,
+          in which case the divergence uses backward differences, or vice
+          versa.
+
+    Returns:
+        torch.Tensor state after one step, with shape [Or, H, W].
+
+    References:
+        [1]: A. Chambolle and Th. Pock.
+          "A First-Order Primal-Dual Algorithm for Convex Problems with
+          Applications to Imaging." In: Journal of Mathematical Imaging and
+          Vision 40 (2011), pp. 120--145.
+          DOI:10.1007/s10851-010-0251-1.
+    """
     Or = u.shape[0]
     k_A1_grad, k_A2_grad = get_A_kernels(Or, u.device, forward_derivatives)
     k_A1_div, k_A2_div = get_A_kernels(Or, u.device, not forward_derivatives)
