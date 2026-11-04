@@ -40,8 +40,7 @@ def denoise(
     σ_o: float,
     σ_a: float,
     ground_truth: GroundTruth | None = None,
-    max_val: float = 255.,
-    logarithmic_scale: bool = False,
+    max_val: float = 255.
 ) -> tuple[torch.Tensor, list[float]]:
     """
     Perform multi-scale roto-translational TV flow enhancing in SIM(2),[1]
@@ -67,8 +66,6 @@ def denoise(
           filters: torch.Tensor filters used for lifting.
           lowpass: torch.Tensor lowpass filter used for lifting.
         `max_val`: maximum value images take, for computing PSNR.
-        `logarithmic_scale`: whether to discretise the scale derivative along
-          the curve a_s e^t, i.e. with step log(`a`), instead of along a_s + t.
 
     Returns:
         torch.Tensor solution to the TV PDE with initial condition `u` at time
@@ -106,7 +103,7 @@ def denoise(
         
     forward_derivatives = True
     for _ in tqdm(range(n)):
-        u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a, forward_derivatives, logarithmic_scale)
+        u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a, forward_derivatives)
         forward_derivatives = not forward_derivatives
         if ground_truth is not None:
             PSNRs.append(PSNR(
@@ -126,7 +123,6 @@ def step_TV(
     σ_o: float,
     σ_a: float,
     forward_derivatives: bool,
-    logarithmic_scale: bool = False,
 ) -> torch.Tensor:
     """
     Perform a single explicit step of multi-scale roto-translational TV flow.
@@ -150,8 +146,6 @@ def step_TV(
         `forward_derivatives`: whether the gradient uses forward differences,
           in which case the divergence uses backward differences, or vice
           versa.
-        `logarithmic_scale`: whether to discretise the scale derivative along
-          the curve a_s e^t, i.e. with step log(`a`), instead of along a_s + t.
 
     Returns:
         torch.Tensor state after one step, with shape [S, Or, H, W].
@@ -188,15 +182,11 @@ def step_TV(
         A3_u = (u_padded[:, 1:-1] - u_padded[:, :-2]) / dθ
 
     u_padded = torch.cat((u[:1], u, u[-1:]), dim=0)
-    if logarithmic_scale:
-        dscale_forward = dscale_backward = log(a)
-    else:
-        dscale_forward = a - 1.
-        dscale_backward = 1. - 1. / a
+    dscale = log(a)
     if forward_derivatives:
-        A4_u = (u_padded[2:] - u_padded[1:-1]) / dscale_forward
+        A4_u = (u_padded[2:] - u_padded[1:-1]) / dscale
     else:
-        A4_u = (u_padded[1:-1] - u_padded[:-2]) / dscale_backward
+        A4_u = (u_padded[1:-1] - u_padded[:-2]) / dscale
 
     grad_norm = (G_inv[0] * A1_u**2 + G_inv[1] * A2_u**2 + G_inv[2] * A3_u**2 + G_inv[3] * A4_u**2).sqrt()
     grad_norm = gaussian_blur_4d_separable(grad_norm, (σ_s, σ_s, σ_o, σ_a))  # + 1e-9
@@ -226,9 +216,9 @@ def step_TV(
 
     normalised_A4_u_padded = F.pad(normalised_A4_u, (0, 0, 0, 0, 0, 0, 1, 1))
     if forward_derivatives:
-        divergence_normalised_grad_4 = (normalised_A4_u_padded[1:-1] - a**2 * normalised_A4_u_padded[:-2]) / dscale_forward
+        divergence_normalised_grad_4 = (normalised_A4_u_padded[1:-1] - a**2 * normalised_A4_u_padded[:-2]) / dscale
     else:
-        divergence_normalised_grad_4 = (normalised_A4_u_padded[2:] / a**2 - normalised_A4_u_padded[1:-1]) / dscale_backward
+        divergence_normalised_grad_4 = (normalised_A4_u_padded[2:] / a**2 - normalised_A4_u_padded[1:-1]) / dscale
 
     return u + dt * (
         divergence_normalised_grad_1
