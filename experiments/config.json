@@ -22,12 +22,34 @@
         "bm3d_step_scale": 0.5
     },
     "collagen": {
-        "ground_truth": "collagen.png"
+        "ground_truth": "collagen.png",
+        "SE2": {
+            "T": 0.03
+        },
+        "SIM2": {
+            "xi": 0.022,
+            "phi": 0.098,
+            "T": 0.02
+        },
+        "bm3d_max_scale": 50.0,
+        "bm3d_step_scale": 0.5
     },
     "monalisa": {
-        "ground_truth": "monalisa.png"
+        "ground_truth": "monalisa.png",
+        "SE2": {
+            "T": 0.04
+        },
+        "SIM2": {
+            "xi": 0.12,
+            "phi": 0.04,
+            "T": 0.1
+        },
+        "bm3d_max_scale": 50.0,
+        "bm3d_step_scale": 0.5
     },
     "retina": {
         "ground_truth": "retina.png"
     }
 }
+
+
