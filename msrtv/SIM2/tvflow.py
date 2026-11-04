@@ -6,8 +6,7 @@ Compute the SIM(2) TV Flow, using PyTorch.[1] The primary methods are:
   1. `denoise`: perform multi-scale roto-translational TV flow on SIM(2) for
   denoising,[1] extending roto-translational total variation (RT-TV) flow on
   SE(2).[2][3]
-  2. `compute_timestep`: compute a timestep for which the explicit scheme is
-  stable.
+  2. `compute_timestep`: compute a timestep for the explicit scheme.
 
 References:
   [1]: "Multi-Scale Roto-Translational Total Variation Flow."
@@ -239,6 +238,17 @@ def compute_timestep(
     """
     Compute timestep to solve multi-scale roto-translational TV flow.[1]
 
+    `step_TV` is a forward Euler step of ∂u/∂t = Σ_i A_i (G_inv[i] A_i u / g),
+    where g is the regularised gradient norm. Freezing g, this is linear
+    diffusion with diffusivities G_inv[i] / g, for which we use the explicit
+    diffusion timestep 2 / Σ_i (G_inv[i] / g) / h_i**2 with g = 1, and step
+    h_4 = log(`a`) in the scale direction. On scale s, the spatial derivatives
+    carry a factor a^s, which is partly compensated by the gradient norm
+    growing with scale; in practice, a factor a^(S - 1) / `dxy`**2 in the
+    spatial terms suffices. This is a heuristic: since g vanishes in flat
+    regions, no timestep is stable for all images, but the nonlinear scheme
+    does not blow up when the bound is violated.
+
     Args:
         `dxy`: step size in x and y direction, taking values greater than 0.
         `dθ`: step size in θ direction, taking values greater than 0.
@@ -259,27 +269,5 @@ def compute_timestep(
     return 2 / (
         (G_inv[0] + G_inv[1]) * max_a / dxy**2
         + G_inv[2] / dθ**2
-        + G_inv[3] * _scale_operator_norm(a, S)
+        + G_inv[3] / log(a)**2
     )
-
-
-def _scale_operator_norm(a: float, S: int) -> float:
-    """
-    Compute the spectral norm of the linear operator in the scale direction
-    of `step_TV`, i.e. v -> -(A4 v - 2 v) composed with A4, where A4 is the
-    scale derivative with forward step a - 1, backward step 1 - 1/a, and
-    one-sided differences at the boundaries.
-    """
-    if S < 2:
-        return 0.
-    dscale_forward = a - 1.
-    dscale_backward = 1. - 1. / a
-    A4 = torch.zeros((S, S), dtype=torch.float64)
-    A4[0, 0], A4[0, 1] = -1. / dscale_forward, 1. / dscale_forward
-    A4[-1, -2], A4[-1, -1] = -1. / dscale_backward, 1. / dscale_backward
-    for s in range(1, S - 1):
-        A4[s, s + 1] += 1. / (2 * dscale_forward)
-        A4[s, s] += 1. / (2 * dscale_backward) - 1. / (2 * dscale_forward)
-        A4[s, s - 1] -= 1. / (2 * dscale_backward)
-    divergence_4 = A4 - 2 * torch.eye(S, dtype=torch.float64)
-    return torch.linalg.matrix_norm(divergence_4 @ A4, ord=2).item()

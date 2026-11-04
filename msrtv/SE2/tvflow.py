@@ -182,20 +182,13 @@ def compute_timestep(
     """
     Compute timestep to solve TV flow.
 
-    `step_TV` is a forward Euler step of
-        ∂u/∂t = Σ_i A_i (G_inv[i] A_i u / g),
-    where the A_i are central differences and g is the regularised gradient
-    norm. Freezing g, the right hand side is a linear operator -L, with L
-    positive semi-definite. The central differences satisfy
-    ‖A_1‖, ‖A_2‖ ≤ 1 / dxy and ‖A_3‖ ≤ 1 / dθ, so that
-        ‖L‖ ≤ (G_inv[0] / dxy**2 + G_inv[1] / dxy**2 + G_inv[2] / dθ**2) / g_min,
-    and forward Euler is stable if dt ≤ 2 / ‖L‖.
-
-    Since g vanishes in flat regions, there is no timestep that is stable for
-    all images. Due to the nonlinearity, the scheme does not blow up even if
-    this bound is violated, but instead small oscillations appear in flat
-    regions. The default `g_min` of 1/4 gives the standard explicit diffusion
-    bound 1 / (2 Σ_i G_inv[i] / h_i**2).
+    `step_TV` is a forward Euler step of ∂u/∂t = Σ_i A_i (G_inv[i] A_i u / g),
+    where g is the regularised gradient norm. Freezing g, this is linear
+    diffusion with diffusivities G_inv[i] / g, for which we use the explicit
+    diffusion timestep 2 / Σ_i (G_inv[i] / g) / h_i**2 with g = 1. This is a
+    heuristic: since g vanishes in flat regions, no timestep is stable for all
+    images, but the nonlinear scheme does not blow up when the bound is
+    violated.
 
     Args:
         `dxy`: step size in x and y direction, taking values greater than 0.
