@@ -26,5 +26,8 @@
     },
     "monalisa": {
         "ground_truth": "monalisa.png"
+    },
+    "retina": {
+        "ground_truth": "retina.png"
     }
 }
