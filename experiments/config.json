@@ -48,7 +48,19 @@
         "bm3d_step_scale": 0.5
     },
     "retina": {
-        "ground_truth": "retina.png"
+        "ground_truth": "retina.png",
+        "sigma_noise": 65,
+        "rho_noise": 1.2,
+        "SE2": {
+            "T": 0.04
+        },
+        "SIM2": {
+            "xi": 0.1,
+            "phi": 0.1,
+            "T": 0.06
+        },
+        "bm3d_max_scale": 100.0,
+        "bm3d_step_scale": 1.0
     }
 }
 

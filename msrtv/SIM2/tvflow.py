@@ -100,10 +100,8 @@ def denoise(
     else:
         PSNRs = []
         
-    forward_derivatives = True
     for _ in tqdm(range(n)):
-        u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a, forward_derivatives)
-        forward_derivatives = not forward_derivatives
+        u = step_TV(u, dt, G_inv, a, σ_s, σ_o, σ_a)
         if ground_truth is not None:
             PSNRs.append(PSNR(
                 inverse_wavelet_transform(u, ground_truth.u_low, ground_truth.filters, ground_truth.lowpass),
@@ -121,13 +119,12 @@ def step_TV(
     σ_s: float,
     σ_o: float,
     σ_a: float,
-    forward_derivatives: bool,
 ) -> torch.Tensor:
     """
     Perform a single explicit step of multi-scale roto-translational TV flow.
 
-    The gradient is discretised with one-sided differences, and the divergence
-    is defined as minus its adjoint.[1]
+    The gradient is discretised with forward differences, and the divergence
+    is defined as minus its adjoint, which uses backward differences.[1]
 
     Args:
         `u`: torch.Tensor current state, with shape [S, Or, H, W].
@@ -142,9 +139,6 @@ def step_TV(
           gradient norm, taking values greater than 0.
         `σ_a`: standard deviation of the scale regularisation of the gradient
           norm, taking values greater than 0.
-        `forward_derivatives`: whether the gradient uses forward differences,
-          in which case the divergence uses backward differences, or vice
-          versa.
 
     Returns:
         torch.Tensor state after one step, with shape [S, Or, H, W].
@@ -157,8 +151,8 @@ def step_TV(
           DOI:10.1007/s10851-010-0251-1.
     """
     S, Or, H, W = u.shape
-    k_A1_grad, k_A2_grad = get_A_kernels(Or, u.device, forward_derivatives)
-    k_A1_div, k_A2_div = get_A_kernels(Or, u.device, not forward_derivatives)
+    k_A1_grad, k_A2_grad = get_A_kernels(Or, u.device, True)
+    k_A1_div, k_A2_div = get_A_kernels(Or, u.device, False)
     dθ = 2 * torch.pi / Or
     scales = (a ** torch.arange(S, device=u.device))
 
@@ -175,17 +169,11 @@ def step_TV(
         pad=(0, 0, 0, 0, 1, 1),
         mode="circular",
     )[0]
-    if forward_derivatives:
-        A3_u = (u_padded[:, 2:] - u_padded[:, 1:-1]) / dθ
-    else:
-        A3_u = (u_padded[:, 1:-1] - u_padded[:, :-2]) / dθ
+    A3_u = (u_padded[:, 2:] - u_padded[:, 1:-1]) / dθ
 
     u_padded = torch.cat((u[:1], u, u[-1:]), dim=0)
     dscale = log(a)
-    if forward_derivatives:
-        A4_u = (u_padded[2:] - u_padded[1:-1]) / dscale
-    else:
-        A4_u = (u_padded[1:-1] - u_padded[:-2]) / dscale
+    A4_u = (u_padded[2:] - u_padded[1:-1]) / dscale
 
     grad_norm = (G_inv[0] * A1_u**2 + G_inv[1] * A2_u**2 + G_inv[2] * A3_u**2 + G_inv[3] * A4_u**2).sqrt()
     grad_norm = gaussian_blur_4d_separable(grad_norm, (σ_s, σ_s, σ_o, σ_a))  # + 1e-9
@@ -208,16 +196,10 @@ def step_TV(
         pad=(0, 0, 0, 0, 1, 1),
         mode="circular",
     )[0]
-    if not forward_derivatives:
-        divergence_normalised_grad_3 = (normalised_A3_u_padded[:, 2:] - normalised_A3_u_padded[:, 1:-1]) / dθ
-    else:
-        divergence_normalised_grad_3 = (normalised_A3_u_padded[:, 1:-1] - normalised_A3_u_padded[:, :-2]) / dθ
+    divergence_normalised_grad_3 = (normalised_A3_u_padded[:, 1:-1] - normalised_A3_u_padded[:, :-2]) / dθ
 
     normalised_A4_u_padded = F.pad(normalised_A4_u, (0, 0, 0, 0, 0, 0, 1, 1))
-    if forward_derivatives:
-        divergence_normalised_grad_4 = (normalised_A4_u_padded[1:-1] - a**2 * normalised_A4_u_padded[:-2]) / dscale
-    else:
-        divergence_normalised_grad_4 = (normalised_A4_u_padded[2:] / a**2 - normalised_A4_u_padded[1:-1]) / dscale
+    divergence_normalised_grad_4 = (normalised_A4_u_padded[1:-1] - a**2 * normalised_A4_u_padded[:-2]) / dscale
 
     return u + dt * (
         divergence_normalised_grad_1
