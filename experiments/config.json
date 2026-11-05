@@ -44,8 +44,8 @@
             "phi": 0.04,
             "T": 0.1
         },
-        "bm3d_max_scale": 50.0,
-        "bm3d_step_scale": 0.5
+        "bm3d_max_scale": 100.0,
+        "bm3d_step_scale": 1.0
     },
     "retina": {
         "ground_truth": "retina.png",
