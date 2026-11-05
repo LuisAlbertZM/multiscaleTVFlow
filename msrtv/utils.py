@@ -12,21 +12,21 @@ def gaussian_blur_4d_separable(
 ) -> torch.Tensor:
     kernel_size = [1 + 2 * ceil(truncate * sigma) for sigma in sigmas]
 
-    x = x[None]
+    shape = x.shape
+    x = x.reshape(-1, 1, *shape[-2:])
 
-    kx = gaussian_kernel_1d(kernel_size[0], sigmas[0], x.device, x.dtype).view(1, 1, 1, 1, -1)
-    kx = kx.repeat(x.shape[1], 1, 1, 1, 1)
+    kx = gaussian_kernel_1d(kernel_size[0], sigmas[0], x.device, x.dtype)
+    ky = gaussian_kernel_1d(kernel_size[1], sigmas[1], x.device, x.dtype)
 
-    ky = gaussian_kernel_1d(kernel_size[1], sigmas[1], x.device, x.dtype).view(1, 1, 1, -1, 1)
-    ky = ky.repeat(x.shape[1], 1, 1, 1, 1)
+    kx = kx.view(1, 1, 1, -1)
+    ky = ky.view(1, 1, -1, 1)
 
-    x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0, 0, 0), mode="reflect")
-    x = F.conv3d(x, kx, groups=x.shape[1])
+    x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0), mode="reflect")
+    x = F.conv2d(x, kx)
+    x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2), mode="reflect")
+    x = F.conv2d(x, ky)
 
-    x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2, 0, 0), mode="reflect")
-    x = F.conv3d(x, ky, groups=x.shape[1])
-
-    x = x[0]
+    x = x.view(shape)
 
     kθ = gaussian_blur_matrix_circular(x.shape[1], kernel_size[2], sigmas[2], x.device, x.dtype)
     ka = gaussian_blur_matrix_reflect(x.shape[0], kernel_size[3], sigmas[3], x.device, x.dtype)
@@ -42,20 +42,20 @@ def gaussian_blur_3d_separable(
 ) -> torch.Tensor:
     kernel_size = [1 + 2 * ceil(truncate * sigma) for sigma in sigmas]
 
-    x = x[None, None]
+    x = x[:, None]
 
     kx = gaussian_kernel_1d(kernel_size[0], sigmas[0], x.device, x.dtype)
     ky = gaussian_kernel_1d(kernel_size[1], sigmas[1], x.device, x.dtype)
 
-    kx = kx.view(1, 1, 1, 1, -1)
-    ky = ky.view(1, 1, 1, -1, 1)
+    kx = kx.view(1, 1, 1, -1)
+    ky = ky.view(1, 1, -1, 1)
 
-    x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0, 0, 0), mode="reflect")
-    x = F.conv3d(x, kx)
-    x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2, 0, 0), mode="reflect")
-    x = F.conv3d(x, ky)
+    x = F.pad(x, (kernel_size[0] // 2, kernel_size[0] // 2, 0, 0), mode="reflect")
+    x = F.conv2d(x, kx)
+    x = F.pad(x, (0, 0, kernel_size[1] // 2, kernel_size[1] // 2), mode="reflect")
+    x = F.conv2d(x, ky)
 
-    x = x[0, 0]
+    x = x[:, 0]
 
     kθ = gaussian_blur_matrix_circular(x.shape[0], kernel_size[2], sigmas[2], x.device, x.dtype)
     x = torch.einsum("ro,o...->r...", kθ, x)
