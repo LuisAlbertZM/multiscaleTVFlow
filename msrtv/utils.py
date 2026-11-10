@@ -96,6 +96,10 @@ def gaussian_kernel_1d(
     coords = (
         torch.arange(kernel_size, device=device, dtype=dtype) - (kernel_size - 1) / 2
     )
+    if sigma == 0:
+        kernel = torch.zeros_like(coords)
+        kernel[kernel_size // 2] = 1
+        return kernel
     kernel = torch.exp(-(coords**2) / (2 * sigma**2))
     kernel /= kernel.sum()
     return kernel
