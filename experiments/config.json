@@ -1,7 +1,7 @@
 {
     "defaults": {
         "sigma_noise": 50,
-        "rho_noise": 1,
+        "rho_noise": 1, 
         "SE2": {
             "xi": 0.01,
             "σ_s": 1.0,
@@ -61,6 +61,36 @@
         },
         "bm3d_max_scale": 100.0,
         "bm3d_step_scale": 1.0
+    },
+     "remco": {
+        "ground_truth": "remco.png",
+        "rho_noise": 1, 
+        "SE2": {
+            "T": 0.04
+        },
+        "SIM2": {
+            "xi": 0.12,
+            "phi": 0.01,
+            "T": 0.1
+        },
+        "bm3d_max_scale": 100.0,
+        "bm3d_step_scale": 1.0
+    },
+    "bark1": {
+        "ground_truth": "bark1.jpg",
+        "sigma_noise": 150,
+        "rho_noise": 0.8, 
+        "SE2": {
+            "xi": 0.12,
+            "T": 2.0
+        },
+        "SIM2": {
+            "xi": 0.12,
+            "phi": 0.01,
+            "T": 0.1
+        },
+        "bm3d_max_scale": 200.0,
+        "bm3d_step_scale": 5.0
     }
 }
 
